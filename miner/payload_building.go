@@ -46,8 +46,10 @@ type BuildPayloadArgs struct {
 	Version      engine.PayloadVersion // Versioning byte for payload id calculation.
 
 	// Options for testing
-	Transactions []*types.Transaction
-	ExtraData    []byte
+	Transactions     []*types.Transaction
+	ExtraData        []byte
+	OnlyProvidedTxs  bool // If true, use only Transactions (no mempool); empty list means empty block.
+	UseExplicitExtra bool // If true, use ExtraData verbatim (including empty) for header.Extra.
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
@@ -215,15 +217,16 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
 	emptyParams := &generateParams{
-		timestamp:   args.Timestamp,
-		forceTime:   true,
-		parentHash:  args.Parent,
-		coinbase:    args.FeeRecipient,
-		random:      args.Random,
-		withdrawals: args.Withdrawals,
-		beaconRoot:  args.BeaconRoot,
-		noTxs:       true,
-		extraData:   args.ExtraData,
+		timestamp:            args.Timestamp,
+		forceTime:            true,
+		parentHash:           args.Parent,
+		coinbase:             args.FeeRecipient,
+		random:               args.Random,
+		withdrawals:          args.Withdrawals,
+		beaconRoot:           args.BeaconRoot,
+		noTxs:                true,
+		extraData:            args.ExtraData,
+		useExplicitExtraData: args.UseExplicitExtra,
 	}
 	empty := miner.generateWork(emptyParams, witness)
 	if empty.err != nil {
@@ -231,6 +234,32 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 	}
 	// Construct a payload object for return.
 	payload := newPayload(empty.block, empty.requests, empty.witness, args.Id())
+
+	fullParams := &generateParams{
+		timestamp:            args.Timestamp,
+		forceTime:            true,
+		parentHash:           args.Parent,
+		coinbase:             args.FeeRecipient,
+		random:               args.Random,
+		withdrawals:          args.Withdrawals,
+		beaconRoot:           args.BeaconRoot,
+		noTxs:                false,
+		extraData:            args.ExtraData,
+		transactions:         args.Transactions,
+		onlyProvidedTxs:      args.OnlyProvidedTxs,
+		useExplicitExtraData: args.UseExplicitExtra,
+	}
+
+	// When OnlyProvidedTxs (testing_buildBlockV1), build the full block synchronously
+	// so the returned payload has exactly the requested transactions and we don't use mempool.
+	if args.OnlyProvidedTxs {
+		r := miner.generateWork(fullParams, witness)
+		if r.err != nil {
+			return nil, r.err
+		}
+		payload.update(r, 0)
+		return payload, nil
+	}
 
 	// Spin up a routine for updating the payload in background. This strategy
 	// can maximum the revenue for including transactions with highest fee.
@@ -244,19 +273,6 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 		// the Mainnet configuration) have passed since the point in time identified
 		// by the timestamp parameter.
 		endTimer := time.NewTimer(time.Second * 12)
-
-		fullParams := &generateParams{
-			timestamp:    args.Timestamp,
-			forceTime:    true,
-			parentHash:   args.Parent,
-			coinbase:     args.FeeRecipient,
-			random:       args.Random,
-			withdrawals:  args.Withdrawals,
-			beaconRoot:   args.BeaconRoot,
-			noTxs:        false,
-			extraData:    args.ExtraData,
-			transactions: args.Transactions,
-		}
 
 		for {
 			select {

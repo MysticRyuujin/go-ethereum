@@ -113,8 +113,10 @@ type generateParams struct {
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
 
-	extraData    []byte
-	transactions []*types.Transaction
+	extraData            []byte
+	transactions         []*types.Transaction
+	onlyProvidedTxs      bool // If true, use only transactions (no mempool); empty list = empty block
+	useExplicitExtraData bool // If true, set header.Extra to extraData even when empty
 }
 
 // generateWork generates a sealing block based on the given parameters.
@@ -136,15 +138,19 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 
 	if !genParam.noTxs {
 		if len(genParam.transactions) == 0 {
-			interrupt := new(atomic.Int32)
-			timer := time.AfterFunc(miner.config.Recommit, func() {
-				interrupt.Store(commitInterruptTimeout)
-			})
-			defer timer.Stop()
+			if genParam.onlyProvidedTxs {
+				// Testing path: empty list means empty block, do not use mempool.
+			} else {
+				interrupt := new(atomic.Int32)
+				timer := time.AfterFunc(miner.config.Recommit, func() {
+					interrupt.Store(commitInterruptTimeout)
+				})
+				defer timer.Stop()
 
-			err := miner.fillTransactions(interrupt, work)
-			if errors.Is(err, errBlockInterruptedByTimeout) {
-				log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
+				err := miner.fillTransactions(interrupt, work)
+				if errors.Is(err, errBlockInterruptedByTimeout) {
+					log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
+				}
 			}
 		} else {
 			// if we have transactions available, we build a block only from them.
@@ -155,7 +161,13 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			}
 			for _, tx := range genParam.transactions {
 				work.state.SetTxContext(tx.Hash(), work.tcount)
-				miner.commitTransaction(work, tx)
+				if err := miner.commitTransaction(work, tx); err != nil {
+					if genParam.onlyProvidedTxs {
+						return &newPayloadResult{err: err}
+					}
+					// Non-testing path: skip invalid txs
+					log.Trace("Transaction failed, skipping", "hash", tx.Hash(), "err", err)
+				}
 			}
 		}
 	}
@@ -237,11 +249,15 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		Coinbase:   genParams.coinbase,
 	}
 	// Set the extra field.
-	if len(miner.config.ExtraData) != 0 {
-		header.Extra = miner.config.ExtraData
-	}
-	if len(genParams.extraData) != 0 {
+	if genParams.useExplicitExtraData {
 		header.Extra = genParams.extraData
+	} else {
+		if len(miner.config.ExtraData) != 0 {
+			header.Extra = miner.config.ExtraData
+		}
+		if len(genParams.extraData) != 0 {
+			header.Extra = genParams.extraData
+		}
 	}
 	// Set the randomness field from the beacon chain if it's available.
 	if genParams.random != (common.Hash{}) {

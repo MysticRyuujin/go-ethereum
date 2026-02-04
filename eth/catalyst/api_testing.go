@@ -50,14 +50,16 @@ func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes en
 		extra = *extraData
 	}
 	args := &miner.BuildPayloadArgs{
-		Parent:       parentHash,
-		Timestamp:    payloadAttributes.Timestamp,
-		FeeRecipient: payloadAttributes.SuggestedFeeRecipient,
-		Random:       payloadAttributes.Random,
-		Withdrawals:  payloadAttributes.Withdrawals,
-		BeaconRoot:   payloadAttributes.BeaconRoot,
-		Transactions: txs,
-		ExtraData:    extra,
+		Parent:           parentHash,
+		Timestamp:        payloadAttributes.Timestamp,
+		FeeRecipient:     payloadAttributes.SuggestedFeeRecipient,
+		Random:           payloadAttributes.Random,
+		Withdrawals:      payloadAttributes.Withdrawals,
+		BeaconRoot:       payloadAttributes.BeaconRoot,
+		Transactions:     txs,
+		ExtraData:        extra,
+		OnlyProvidedTxs:  true, // testing_buildBlockV1: use only given transactions, no mempool
+		UseExplicitExtra: true, // testing_buildBlockV1: use given extraData verbatim (including 0x when null)
 	}
 	payload, err := api.eth.Miner().BuildPayload(args, false)
 	if err != nil {
