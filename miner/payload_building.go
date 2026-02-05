@@ -255,6 +255,9 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 	if args.OnlyProvidedTxs {
 		r := miner.generateWork(fullParams, witness)
 		if r.err != nil {
+			// Must return the error: testing API requires a block built with only the provided
+			// txs. Normal mining can return an empty payload and keep retrying in the background;
+			// we cannot—the caller must get the failure.
 			return nil, r.err
 		}
 		payload.update(r, 0)
