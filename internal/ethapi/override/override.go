@@ -17,11 +17,11 @@
 package override
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
-	"sort"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -61,11 +61,7 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 		return nil
 	}
 	// Iterate in deterministic order so error messages and behavior are stable (e.g. for tests).
-	addrs := make([]common.Address, 0, len(*diff))
-	for addr := range *diff {
-		addrs = append(addrs, addr)
-	}
-	sort.Slice(addrs, func(i, j int) bool { return bytes.Compare(addrs[i][:], addrs[j][:]) < 0 })
+	addrs := slices.SortedFunc(maps.Keys(*diff), common.Address.Cmp)
 
 	// Tracks destinations of precompiles that were moved.
 	dirtyAddrs := make(map[common.Address]struct{})

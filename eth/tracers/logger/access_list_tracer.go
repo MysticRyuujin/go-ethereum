@@ -17,9 +17,8 @@
 package logger
 
 import (
-	"bytes"
 	"maps"
-	"sort"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -85,21 +84,12 @@ func (al accessList) equal(other accessList) bool {
 // accessList converts the accesslist to a types.AccessList.
 // Addresses and storage keys are sorted so the result is deterministic (e.g. for eth_createAccessList fixtures).
 func (al accessList) accessList() types.AccessList {
-	addrs := make([]common.Address, 0, len(al))
-	for addr := range al {
-		addrs = append(addrs, addr)
-	}
-	sort.Slice(addrs, func(i, j int) bool { return bytes.Compare(addrs[i][:], addrs[j][:]) < 0 })
 	acl := make(types.AccessList, 0, len(al))
-	for _, addr := range addrs {
-		slots := al[addr]
-		keys := make([]common.Hash, 0, len(slots))
-		for slot := range slots {
-			keys = append(keys, slot)
-		}
-		sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i][:], keys[j][:]) < 0 })
+	for addr, slots := range al {
+		keys := slices.SortedFunc(maps.Keys(slots), common.Hash.Cmp)
 		acl = append(acl, types.AccessTuple{Address: addr, StorageKeys: keys})
 	}
+	slices.SortFunc(acl, func(a, b types.AccessTuple) int { return a.Address.Cmp(b.Address) })
 	return acl
 }
 
