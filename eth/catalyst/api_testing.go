@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
@@ -32,21 +33,37 @@ func RegisterTestingAPI(stack *node.Node, backend *eth.Ethereum) error {
 	return nil
 }
 
-func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions []hexutil.Bytes, extraData *hexutil.Bytes) (*engine.ExecutionPayloadEnvelope, error) {
+func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes engine.PayloadAttributes, transactions *[]hexutil.Bytes, extraData *hexutil.Bytes) (*engine.ExecutionPayloadEnvelope, error) {
 	if api.eth.BlockChain().CurrentBlock().Hash() != parentHash {
 		return nil, errors.New("parentHash is not current head")
 	}
-	dec := make([][]byte, 0, len(transactions))
-	for _, tx := range transactions {
-		dec = append(dec, tx)
+
+	// Determine whether to force override transactions or build from mempool
+	var txs []*types.Transaction
+	var forceOverride bool
+
+	if transactions == nil {
+		// null transactions: build from mempool
+		forceOverride = false
+		txs = nil
+	} else {
+		// empty array or non-empty array: force override with specified transactions
+		forceOverride = true
+		dec := make([][]byte, 0, len(*transactions))
+		for _, tx := range *transactions {
+			dec = append(dec, tx)
+		}
+		var err error
+		txs, err = engine.DecodeTransactions(dec)
+		if err != nil {
+			return nil, err
+		}
 	}
-	txs, err := engine.DecodeTransactions(dec)
-	if err != nil {
-		return nil, err
-	}
-	extra := make([]byte, 0)
+
+	var extra *[]byte
 	if extraData != nil {
-		extra = *extraData
+		extraBytes := []byte(*extraData)
+		extra = &extraBytes
 	}
 	args := &miner.BuildPayloadArgs{
 		Parent:       parentHash,
@@ -56,5 +73,5 @@ func (api *TestingAPI) BuildBlockV1(parentHash common.Hash, payloadAttributes en
 		Withdrawals:  payloadAttributes.Withdrawals,
 		BeaconRoot:   payloadAttributes.BeaconRoot,
 	}
-	return api.eth.Miner().BuildTestingPayload(args, txs, extra)
+	return api.eth.Miner().BuildTestingPayload(args, txs, extra, forceOverride)
 }

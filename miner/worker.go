@@ -113,8 +113,8 @@ type generateParams struct {
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
 
-	forceOverrides    bool // Flag whether we should overwrite extraData and transactions
-	overrideExtraData []byte
+	forceOverrides    bool // Flag whether we should overwrite transactions
+	overrideExtraData *[]byte
 	overrideTxs       []*types.Transaction
 }
 
@@ -238,11 +238,10 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		Coinbase:   genParams.coinbase,
 	}
 	// Set the extra field.
-	if len(miner.config.ExtraData) != 0 {
+	if genParams.overrideExtraData != nil {
+		header.Extra = *genParams.overrideExtraData
+	} else if len(miner.config.ExtraData) != 0 {
 		header.Extra = miner.config.ExtraData
-	}
-	if genParams.forceOverrides {
-		header.Extra = genParams.overrideExtraData
 	}
 	// Set the randomness field from the beacon chain if it's available.
 	if genParams.random != (common.Hash{}) {
