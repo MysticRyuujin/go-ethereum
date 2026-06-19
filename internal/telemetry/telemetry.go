@@ -85,6 +85,9 @@ type RPCInfo struct {
 // (e.g. "jsonrpc.engine/newPayloadV4") which follows the Open Telemetry
 // semantic convensions: https://opentelemetry.io/docs/specs/semconv/rpc/rpc-spans/#span-name.
 func StartCallServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(*error)) {
+	if tracer == nil {
+		return ctx, func(*error) {}
+	}
 	var (
 		name       = fmt.Sprintf("%s.%s/%s", rpc.System, rpc.Service, rpc.Method)
 		attributes = append([]Attribute{
@@ -104,6 +107,9 @@ func StartCallServerSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, 
 // The span name is "$system.batch" (e.g. "jsonrpc.batch") and per-call spans are nested under it.
 // batchSize is exposed as rpc.batch.size.
 func StartBatchServerSpan(ctx context.Context, tracer trace.Tracer, system string, batchSize int, others ...Attribute) (context.Context, func(*error)) {
+	if tracer == nil {
+		return ctx, func(*error) {}
+	}
 	attributes := append([]Attribute{
 		semconv.RPCSystemKey.String(system),
 		IntAttribute("rpc.batch.size", batchSize),
@@ -115,6 +121,9 @@ func StartBatchServerSpan(ctx context.Context, tracer trace.Tracer, system strin
 // StartBatchCallSpan creates a SpanKind=INTERNAL span for an individual RPC call as part of a batch.
 // This carries the same name and attributes as StartCallServerSpan.
 func StartBatchCallSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, others ...Attribute) (context.Context, func(*error)) {
+	if tracer == nil {
+		return ctx, func(*error) {}
+	}
 	var (
 		name       = fmt.Sprintf("%s.%s/%s", rpc.System, rpc.Service, rpc.Method)
 		attributes = append([]Attribute{
@@ -132,6 +141,9 @@ func StartBatchCallSpan(ctx context.Context, tracer trace.Tracer, rpc RPCInfo, o
 
 // startSpan creates a span with the given kind.
 func startSpan(ctx context.Context, tracer trace.Tracer, kind trace.SpanKind, spanName string, attributes ...Attribute) (context.Context, trace.Span, func(*error)) {
+	if tracer == nil {
+		return ctx, trace.SpanFromContext(ctx), func(*error) {}
+	}
 	ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(kind))
 	if len(attributes) > 0 {
 		span.SetAttributes(attributes...)

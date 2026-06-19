@@ -30,7 +30,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/log"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -651,13 +650,12 @@ func rpcInfoFromMessage(msg *jsonrpcMessage) telemetry.RPCInfo {
 	return info
 }
 
-// tracer returns the OpenTelemetry Tracer for RPC call tracing.
+// tracer returns the OpenTelemetry Tracer for RPC call tracing, or nil when no
+// provider is configured. The telemetry helpers treat a nil tracer as "tracing
+// disabled" and skip span allocation entirely, which is the common case.
 func (h *handler) tracer() trace.Tracer {
 	if h.tracerProvider == nil {
-		// Default to global TracerProvider if none is set.
-		// Note: If no TracerProvider is set, the default is a no-op TracerProvider.
-		// See https://pkg.go.dev/go.opentelemetry.io/otel#GetTracerProvider
-		return otel.Tracer("")
+		return nil
 	}
 	return h.tracerProvider.Tracer("")
 }
