@@ -151,6 +151,11 @@ func (h Hash) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(h[:]).MarshalText()
 }
 
+// AppendText implements encoding.TextAppender.
+func (h Hash) AppendText(dst []byte) ([]byte, error) {
+	return hexutil.Bytes(h[:]).AppendText(dst)
+}
+
 // SetBytes sets the hash to the value of b.
 // If b is larger than len(h), b will be cropped from the left.
 func (h *Hash) SetBytes(b []byte) {
@@ -335,6 +340,11 @@ func (a *Address) SetBytes(b []byte) {
 // MarshalText returns the hex representation of a.
 func (a Address) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(a[:]).MarshalText()
+}
+
+// AppendText implements encoding.TextAppender.
+func (a Address) AppendText(dst []byte) ([]byte, error) {
+	return hexutil.Bytes(a[:]).AppendText(dst)
 }
 
 // UnmarshalText parses a hash in hex syntax.

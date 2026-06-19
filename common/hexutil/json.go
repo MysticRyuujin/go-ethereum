@@ -47,6 +47,12 @@ func (b Bytes) MarshalText() ([]byte, error) {
 	return result, nil
 }
 
+// AppendText implements encoding.TextAppender.
+func (b Bytes) AppendText(dst []byte) ([]byte, error) {
+	dst = append(dst, '0', 'x')
+	return hex.AppendEncode(dst, b), nil
+}
+
 // UnmarshalJSON implements json.Unmarshaler.
 func (b *Bytes) UnmarshalJSON(input []byte) error {
 	if !isString(input) {
@@ -159,6 +165,11 @@ func (b Big) MarshalText() ([]byte, error) {
 	return []byte(EncodeBig((*big.Int)(&b))), nil
 }
 
+// AppendText implements encoding.TextAppender.
+func (b Big) AppendText(dst []byte) ([]byte, error) {
+	return append(dst, EncodeBig((*big.Int)(&b))...), nil
+}
+
 // UnmarshalJSON implements json.Unmarshaler.
 func (b *Big) UnmarshalJSON(input []byte) error {
 	if !isString(input) {
@@ -242,6 +253,11 @@ func (b U256) MarshalText() ([]byte, error) {
 	return []byte(u256.Hex()), nil
 }
 
+// AppendText implements encoding.TextAppender.
+func (b U256) AppendText(dst []byte) ([]byte, error) {
+	return append(dst, (*uint256.Int)(&b).Hex()...), nil
+}
+
 // UnmarshalJSON implements json.Unmarshaler.
 func (b *U256) UnmarshalJSON(input []byte) error {
 	// The uint256.Int.UnmarshalJSON method accepts "dec", "0xhex"; we must be
@@ -284,6 +300,12 @@ func (b Uint64) MarshalText() ([]byte, error) {
 	copy(buf, `0x`)
 	buf = strconv.AppendUint(buf, uint64(b), 16)
 	return buf, nil
+}
+
+// AppendText implements encoding.TextAppender.
+func (b Uint64) AppendText(dst []byte) ([]byte, error) {
+	dst = append(dst, '0', 'x')
+	return strconv.AppendUint(dst, uint64(b), 16), nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -345,6 +367,11 @@ type Uint uint
 // MarshalText implements encoding.TextMarshaler.
 func (b Uint) MarshalText() ([]byte, error) {
 	return Uint64(b).MarshalText()
+}
+
+// AppendText implements encoding.TextAppender.
+func (b Uint) AppendText(dst []byte) ([]byte, error) {
+	return Uint64(b).AppendText(dst)
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
