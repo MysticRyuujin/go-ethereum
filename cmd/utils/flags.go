@@ -1741,12 +1741,20 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))
 		}
 	}
-	// Ensure Go's GC ignores the database cache for trigger percentage
-	cache := ctx.Int(CacheFlag.Name)
-	gogc := max(20, min(100, 100/(float64(cache)/1024)))
-
-	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
-	godebug.SetGCPercent(int(gogc))
+	// Tune the garbage collector. A soft memory limit lets the collector use
+	// the available budget rather than triggering at a low GOGC, which on large
+	// caches ran GC very frequently and added latency jitter to RPC serving.
+	// Headroom is reserved for native (off-heap) allocations and the OS page
+	// cache backing memory-mapped database files, neither tracked by GOMEMLIMIT.
+	if total > 0 {
+		godebug.SetMemoryLimit(int64(total) / 5 * 4)
+		godebug.SetGCPercent(100)
+	} else {
+		cache := ctx.Int(CacheFlag.Name)
+		gogc := max(20, min(100, 100/(float64(cache)/1024)))
+		log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
+		godebug.SetGCPercent(int(gogc))
+	}
 
 	if ctx.IsSet(SyncTargetFlag.Name) {
 		cfg.SyncMode = ethconfig.FullSync // dev sync target forces full sync
